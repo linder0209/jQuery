@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+  <meta charset="UTF-8">
+  <title></title>
+</head>
+<body>
+<div id="demo">
+  <header>Header</header>
+  <p>
+    This is a DOM Tree Demo
+  </p>
+
+  <div class="button-panel">
+    <button type="button">按钮</button>
+  </div>
+  <div class="text-panel" id="text_panel">
+    <span>文本</span>
+  </div>
+</div>
+<script src="../2.1.3/jquery.js"></script>
+<script>
+  $(function(){
+    /*var button = $('#demo > p ~ div.button-panel > button[type="button"]');
+    console.info(button);*/
+    var button2 = $('#demo > p ~ div.button-panel > :button,#text_panel:first-child');
+    console.info(button2);
+  });
+</script>
+</body>
+</html>

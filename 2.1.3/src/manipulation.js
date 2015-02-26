@@ -16,9 +16,9 @@ define([
 ], function( jQuery, concat, push, access, rcheckableType, support, data_priv, data_user ) {
 
 var
-	rxhtmlTag = /<(?!area|br|col|embed|hr|img|input|link|meta|param)(([\w:]+)[^>]*)\/>/gi,
-	rtagName = /<([\w:]+)/,
-	rhtml = /<|&#?\w+;/,
+	rxhtmlTag = /<(?!area|br|col|embed|hr|img|input|link|meta|param)(([\w:]+)[^>]*)\/>/gi,//匹配不包含area，br等标签，比如 <div/> 或 <div dd/>
+	rtagName = /<([\w:]+)/,//html标签正则表达式
+	rhtml = /<|&#?\w+;/,//表示包含< 或者&#123;(#可选)，即非正常文本正则表达式
 	rnoInnerhtml = /<(?:script|style|link)/i,
 	// checked="checked" or checked
 	rchecked = /checked\s*(?:[^=]|=\s*.checked.)/i,
@@ -187,6 +187,14 @@ jQuery.extend({
 		return clone;
 	},
 
+  /**
+   * 构建html片段
+   * @param elems
+   * @param context
+   * @param scripts
+   * @param selection
+   * @returns {DocumentFragment}
+   */
 	buildFragment: function( elems, context, scripts, selection ) {
 		var elem, tmp, tag, wrap, contains, j,
 			fragment = context.createDocumentFragment(),
@@ -207,14 +215,17 @@ jQuery.extend({
 
 				// Convert non-html into a text node
 				} else if ( !rhtml.test( elem ) ) {
-					nodes.push( context.createTextNode( elem ) );
+					nodes.push( context.createTextNode( elem ) );//如果是文本节点，则创建文本
 
 				// Convert html into DOM nodes
 				} else {
+          //创建临时div
 					tmp = tmp || fragment.appendChild( context.createElement("div") );
 
 					// Deserialize a standard representation
+          //容错的写法，利用 || [ "", "" ] 来处理
 					tag = ( rtagName.exec( elem ) || [ "", "" ] )[ 1 ].toLowerCase();
+          //需要包裹的一些html标签
 					wrap = wrapMap[ tag ] || wrapMap._default;
 					tmp.innerHTML = wrap[ 1 ] + elem.replace( rxhtmlTag, "<$1></$2>" ) + wrap[ 2 ];
 
@@ -249,6 +260,7 @@ jQuery.extend({
 				continue;
 			}
 
+      //判断是否为包含关系
 			contains = jQuery.contains( elem.ownerDocument, elem );
 
 			// Append to fragment

@@ -1,0 +1,65 @@
+[
+  [
+    {
+      "value": "#demo",
+      "type": "ID",
+      "matches": ["demo"]
+    },
+    {
+      "value": " > ",
+      "type": ">"
+    },
+    {
+      "value": "p",
+      "type": "TAG",
+      "matches": ["p"]
+    },
+    {
+      "value": " ~ ",
+      "type": "~"
+    },
+    {
+      "value": "div",
+      "type": "TAG",
+      "matches": ["div"]
+    },
+    {
+      "value": ".button-panel",
+      "type": "CLASS",
+      "matches": ["button-panel"]
+    },
+    {
+      "value": " > ",
+      "type": ">"
+    },
+    {
+      "value": ":button",
+      "type": "PSEUDO",
+      "matches": [
+        "button",
+        null
+      ]
+    }
+  ],
+  [
+    {
+      "value": "#text_panel",
+      "type": "ID",
+      "matches": ["text_panel"]
+    },
+    {
+      "value": ":first-child",
+      "type": "CHILD",
+      "matches": [
+        "first",
+        "child",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
+  ]
+]
