@@ -12,12 +12,12 @@
 
   var i,//循环变量
     support,//浏览器兼容性
-    Expr,//选择器实体，用来处理不同的选择器，如关系符、过滤器以及伪类
+    Expr,//选择器实体，用来处理不同的选择器，如 ID　关系符、过滤器以及伪类
     getText,
     isXML,//是否为XML
     tokenize,//词法解析，生成token序列
     compile,//编译函数
-    select,// 处理其他选择器（不是浏览器本身的，比如 :input 等）函数
+    select,// 一个选择器编译函数，用来处理浏览器不支持 querySelectorAll 的情况，或者其他选择器（不是浏览器本身的，比如 :input 等）
     outermostContext,
     sortInput,
     hasDuplicate,
@@ -226,13 +226,19 @@
     // QSA vars
       i, groups, old, nid, newContext, newSelector;
 
-    //实际上只有当context.ownerDocument改变或者document改变，才会执行setDocument方法
-    //setDocument方法中会处理兼容性问题
+    /**
+     * 实际上这里很少会调用 setDocument(context)来重新设置document，
+     * 只有当context的ownerDocument为空并且context不等于当前的document时
+     * 举个例子，比如页面中有个iframe，id为iframe1，当context为 document.getElementById('iframe1').contentDocument 时，
+     * 由于此时的上下文交给了iframe中的 contentDocument，即document发生了改变，所以会重新设置document
+     * 这里需要注意的是，document只是个普通的变量，不是指 window.document
+     */
     if (( context ? context.ownerDocument || context : preferredDoc ) !== document) {
       setDocument(context);
     }
 
     context = context || document;
+    //查询结果集
     results = results || [];
     nodeType = context.nodeType;
     /**
@@ -250,19 +256,24 @@
      Node.DOCUMENT_FRAGMENT_NODE (11)
      Node.NOTATION_NODE (12)
      */
+    //如果没传入选择器表达式或者传入的选择器表达器类型不是string 或者 nodeType不等于 [1,9,11]
     if (typeof selector !== "string" || !selector ||
       nodeType !== 1 && nodeType !== 9 && nodeType !== 11) {
 
       return results;
     }
 
+    //文档是HTML并且没有传入候选集seed
     if (!seed && documentIsHTML) {
 
       // Try to shortcut find operations when possible (e.g., not under DocumentFragment)
+      // rquickExpr = /^(?:#([\w-]+)|(\w+)|\.([\w-]+))$/,
+      // 快速匹配最常用的单一 id tag class
+      // rquickExpr 捕获组1:id 捕获组2:tag 捕获组3:class
       if (nodeType !== 11 && (match = rquickExpr.exec(selector))) {
-        // Speed-up: Sizzle("#ID")
+        // Speed-up: Sizzle("#ID") id 分支
         if ((m = match[1])) {
-          if (nodeType === 9) {
+          if (nodeType === 9) {//Context is a document
             elem = context.getElementById(m);
             // Check parentNode to catch when Blackberry 4.6 returns
             // nodes that are no longer in the document (jQuery #6963)
@@ -278,6 +289,7 @@
             }
           } else {
             // Context is not a document
+            // 得到上下文所属document,然后调用document.getElementById,并判断得到的elem是否属于contains并且看看elem的id属性是否等于m
             if (context.ownerDocument && (elem = context.ownerDocument.getElementById(m)) &&
               contains(context, elem) && elem.id === m) {
               results.push(elem);
@@ -285,12 +297,12 @@
             }
           }
 
-          // Speed-up: Sizzle("TAG")
+          // Speed-up: Sizzle("TAG") tag 分支
         } else if (match[2]) {
           push.apply(results, context.getElementsByTagName(selector));
           return results;
 
-          // Speed-up: Sizzle(".CLASS")
+          // Speed-up: Sizzle(".CLASS") class 分支
         } else if ((m = match[3]) && support.getElementsByClassName) {
           push.apply(results, context.getElementsByClassName(m));
           return results;
@@ -298,8 +310,9 @@
       }
 
       // QSA path
+      //支持 querySelectorAll，这里support.qsa为true表示支持 querySelectorAll，并且不存在兼容性问题时
       if (support.qsa && (!rbuggyQSA || !rbuggyQSA.test(selector))) {
-        nid = old = expando;
+        nid = old = expando;//定义一个临时id
         newContext = context;
         newSelector = nodeType !== 1 && selector;
 
@@ -307,6 +320,7 @@
         // We can work around this by specifying an extra ID on the root
         // and working up from there (Thanks to Andrew Dupont for the technique)
         // IE 8 doesn't work on object elements
+        //这里会把selector修正为包含 [id='xx']格式的selector，便于解析
         if (nodeType === 1 && context.nodeName.toLowerCase() !== "object") {
           groups = tokenize(selector);//词法解析生成token序列
 
@@ -343,7 +357,7 @@
     }
 
     // All others
-    // 其他选择器，即不是浏览器本身支持的，比如 :input等
+    // 原生方法不可用时，或是其他选择器时，即不是浏览器本身支持的，比如 :input等调用以下方法处理
     return select(selector.replace(rtrim, "$1"), context, results, seed);
   }
 
@@ -527,14 +541,17 @@
     }
 
     // Set our document
+    //设置全局的document为当前doc
     document = doc;
     docElem = doc.documentElement;
+    //document所属的window
     parent = doc.defaultView;
 
     // Support: IE>8
     // If iframe document is assigned to "document" variable and if iframe has been reloaded,
     // IE will throw "permission denied" error when accessing "document" variable, see jQuery #13936
     // IE6-8 do not support the defaultView property so parent will be undefined
+    // 所以要在unload的时候重新 setDocument()
     if (parent && parent !== parent.top) {
       // IE11 does not have attachEvent, so all must suffer
       if (parent.addEventListener) {
@@ -554,9 +571,11 @@
     // Support: IE<8
     // Verify that getAttribute really returns attributes and not properties
     // (excepting IE8 booleans)
-    // 兼容性问题，测试是否完全支持 getAttribute方法
+    // 兼容性问题，测试 getAttribute 方法是否为标准用法，对于获取class属性值
+    // IE6 和 IE7 是利用 div.getAttribute("className")来获取的，标准的是用 div.getAttribute("class")获取的
     support.attributes = assert(function (div) {
       div.className = "i";
+      //检查如果 div.getAttribute("className") 返回 null，说明getAttribute是标准用法
       return !div.getAttribute("className");
     });
 
@@ -564,7 +583,7 @@
      ---------------------------------------------------------------------- */
 
     // Check if getElementsByTagName("*") returns only elements
-    //检查 getElementsByTagName("*") 返回的是否包含文本类型的元素
+    //检查 getElementsByTagName("*") 返回的是否包含文本类型的元素，对于IE < 9 会返回包含文本类型的元素，即 div.getElementsByTagName("*").length 的值为1
     support.getElementsByTagName = assert(function (div) {
       div.appendChild(doc.createComment(""));
       return !div.getElementsByTagName("*").length;
@@ -572,28 +591,33 @@
 
     // Support: IE<9
     // function getElementsByClassName() { [native code] }  正则表达式来检测该方法（函数是否存在）
+    // 检测浏览器是否支持 getElementsByClassName
     support.getElementsByClassName = rnative.test(doc.getElementsByClassName);
 
     // Support: IE<10
     // Check if getElementById returns elements by name
     // The broken getElementById methods don't pick up programatically-set names,
     // so use a roundabout getElementsByName test
+    // 检查getElementById是否能通过 getElementsByName 返回元素，IE < 10 是不标准的，所以 support.getById 是 false
     support.getById = assert(function (div) {
       docElem.appendChild(div).id = expando;
       return !doc.getElementsByName || !doc.getElementsByName(expando).length;
     });
 
     // ID find and filter
+    // 标准用法
     if (support.getById) {
       Expr.find["ID"] = function (id, context) {
         if (typeof context.getElementById !== "undefined" && documentIsHTML) {
           var m = context.getElementById(id);
           // Check parentNode to catch when Blackberry 4.6 returns
           // nodes that are no longer in the document #6963
+          // 检查 nodes节点是否临时创建的
           return m && m.parentNode ? [m] : [];
         }
       };
       Expr.filter["ID"] = function (id) {
+        //将转义字符转回字符串
         var attrId = id.replace(runescape, funescape);
         return function (elem) {
           return elem.getAttribute("id") === attrId;
@@ -602,6 +626,7 @@
     } else {
       // Support: IE6/7
       // getElementById is not reliable as a find shortcut
+      //IE6,7的getElementById因为会根据name返回元素，所以是不能用原生getElementById方法获取元素的。故需要删除
       delete Expr.find["ID"];
 
       Expr.filter["ID"] = function (id) {
@@ -635,7 +660,7 @@
         // Filter out possible comments
         if (tag === "*") {
           while ((elem = results[i++])) {
-            if (elem.nodeType === 1) {
+            if (elem.nodeType === 1) {// 过滤掉其他的nodes，只保留标签元素
               tmp.push(elem);
             }
           }
@@ -667,6 +692,7 @@
     // See http://bugs.jquery.com/ticket/13378
     rbuggyQSA = [];
 
+    // 当浏览器支持方法 querySelectorAll 时，处理一些兼容性问题，并且把查询分析器表达式放到 rbuggyQSA 中
     if ((support.qsa = rnative.test(doc.querySelectorAll))) {
       // Build QSA regex
       // Regex strategy adopted from Diego Perini
@@ -684,12 +710,14 @@
         // Nothing should be selected when empty strings follow ^= or $= or *=
         // The test attribute must be unknown in Opera but "safe" for WinRT
         // http://msdn.microsoft.com/en-us/library/ie/hh465388.aspx#attribute_section
+        // 检测是否可以使用 *^$ 来查询属性值
         if (div.querySelectorAll("[msallowcapture^='']").length) {
           rbuggyQSA.push("[*^$]=" + whitespace + "*(?:''|\"\")");
         }
 
         // Support: IE8
         // Boolean attributes and "value" are not treated correctly
+        // 如果不支持 div.querySelectorAll("[selected]") 则需要把 booleans 中定义的放到查询分析器rbuggyQSA中
         if (!div.querySelectorAll("[selected]").length) {
           rbuggyQSA.push("\\[" + whitespace + "*(?:value|" + booleans + ")");
         }
@@ -739,6 +767,8 @@
       });
     }
 
+    // 当浏览器支持方法 docElem.matches || docElem.webkitMatchesSelector || docElem.mozMatchesSelector || docElem.oMatchesSelector || docElem.msMatchesSelector 时，
+    // 处理一些兼容性问题，并且设置 rbuggyMatches
     if ((support.matchesSelector = rnative.test((matches = docElem.matches ||
       docElem.webkitMatchesSelector ||
       docElem.mozMatchesSelector ||
@@ -762,11 +792,26 @@
 
     /* Contains
      ---------------------------------------------------------------------- */
+    // compareDocumentPosition 是用来确定两个node位置的，node A node B 可能有以下位置
+    /**
+     *
+     Bits
+     (compareDocumentPosition 返回值)         Number        Meaning
+     000000                                     0              元素一致
+     000001                                     1              节点在不同的文档（或者一个在文档之外）
+     000010                                     2              节点 B 在节点 A 之前
+     000100                                     4              节点 A 在节点 B 之前
+     001000                                     8              节点 B 包含节点 A
+     010000                                     16             节点 A 包含节点 B
+     100000                                     32             浏览器的私有使用
+     * 对于IE是调用 contains 来实现的，但没有compareDocumentPosition功能强大
+     */
     hasCompare = rnative.test(docElem.compareDocumentPosition);
 
     // Element contains another
     // Purposefully does not implement inclusive descendent
     // As in, an element does not contain itself
+    // 利用 compareDocumentPosition 或 contains来判断两个node元素是否为包含关系
     contains = hasCompare || rnative.test(docElem.contains) ?
       function (a, b) {
         var adown = a.nodeType === 9 ? a.documentElement : a,
@@ -792,6 +837,7 @@
      ---------------------------------------------------------------------- */
 
     // Document order sorting
+    // 节点元素排序函数
     sortOrder = hasCompare ?
       function (a, b) {
 
@@ -2070,8 +2116,9 @@
   };
 
   /**
-   * 用来处理低级别的选择器，也就是浏览器不支持的选择符，比如 :button 等
-   * 效率比浏览器支持的选择器低，因此在考虑性能的时候，尽量使用CSS3选择器，即浏览器原生的选择器
+   *  http://blog.csdn.net/songzheng_741/article/details/25704159
+   * 用来处理浏览器不支持 querySelectorAll 的情况或者处理低级别的选择器，也就是浏览器不支持的选择符，比如 :button 等
+   * 该方法处理效率比浏览器支持的选择器低，因此在考虑性能的时候，尽量使用CSS3选择器，即浏览器原生的选择器
    * A low-level selection function that works with Sizzle's compiled
    *  selector functions
    * @param {String|Function} selector A selector or a pre-compiled

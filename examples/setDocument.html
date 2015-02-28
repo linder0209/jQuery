@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title></title>
+</head>
+<body>
+<div id="div1" class="class1"><p>dd</p>This is a Tag.</div>
+<iframe id="iframe1" src="iframe.html" frameborder="0">
+
+</iframe>
+<script src="http://code.jquery.com/jquery-1.11.2.js"></script>
+<script>
+    $(function(){
+        $('#div1',document.getElementById('iframe1').contentDocument);
+
+
+
+        alert(assert(function (div) {
+            div.appendChild(document.createComment(""));
+            alert(div.getElementsByTagName("*").length);
+            return !div.getElementsByTagName("*").length;
+        }));
+        function assert(fn) {
+            var div = document.createElement("div");
+
+            try {
+                return !!fn(div);
+            } catch (e) {
+                return false;
+            } finally {
+                // Remove from its parent by default
+                if (div.parentNode) {
+                    div.parentNode.removeChild(div);
+                }
+                // release memory in IE
+                div = null;
+            }
+        }
+    });
+</script>
+</body>
+</html>
