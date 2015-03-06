@@ -1,13 +1,25 @@
 [
   [
     {
-      "value": "#demo",
-      "type": "ID",
-      "matches": ["demo"]
+      "value": "div",
+      "type": "TAG",
+      "matches": ["div"]
     },
     {
       "value": " > ",
       "type": ">"
+    },
+    {
+      "value": ":header",
+      "type": "PSEUDO",
+      "matches": [
+        "header",
+        null
+      ]
+    },
+    {
+      "value": " + ",
+      "type": "+"
     },
     {
       "value": "p",
@@ -33,32 +45,17 @@
       "type": ">"
     },
     {
-      "value": ":button",
-      "type": "PSEUDO",
-      "matches": [
-        "button",
-        null
-      ]
-    }
-  ],
-  [
-    {
-      "value": "#text_panel",
-      "type": "ID",
-      "matches": ["text_panel"]
+      "value": "button",
+      "type": "TAG",
+      "matches": ["button"]
     },
     {
-      "value": ":first-child",
-      "type": "CHILD",
+      "value": "[name=\"btn1\"]",
+      "type": "ATTR",
       "matches": [
-        "first",
-        "child",
-        null,
-        null,
-        null,
-        null,
-        null,
-        null
+        "name",
+        "=",
+        "btn1"
       ]
     }
   ]

@@ -36,7 +36,7 @@
     expando = "sizzle" + 1 * new Date(),
     preferredDoc = window.document,
     dirruns = 0,
-    done = 0,
+    done = 0,//一变量，在预编译函数中一中间量
     classCache = createCache(),
     tokenCache = createCache(),
     compilerCache = createCache(),
@@ -59,6 +59,7 @@
     slice = arr.slice,
   // Use a stripped-down indexOf as it's faster than native
   // http://jsperf.com/thor-indexof-vs-for/5
+    //判断elem是否属于list，即list中是否包含elem
     indexOf = function (list, elem) {
       var i = 0,
         len = list.length;
@@ -121,7 +122,7 @@
     rtrim = new RegExp("^" + whitespace + "+|((?:^|[^\\\\])(?:\\\\.)*)" + whitespace + "+$", "g"),//以空白开头以空白结尾的正则表达式
 
     rcomma = new RegExp("^" + whitespace + "*," + whitespace + "*"),//带,号的空白
-    rcombinators = new RegExp("^" + whitespace + "*([>+~]|" + whitespace + ")" + whitespace + "*"),//带>+~的选择器表达式
+    rcombinators = new RegExp("^" + whitespace + "*([>+~]|" + whitespace + ")" + whitespace + "*"),//带> + ~ 或空白的选择器表达式
 
     rattributeQuotes = new RegExp("=" + whitespace + "*([^\\]'\"]*?)" + whitespace + "*\\]", "g"),//=开头的正则表达式
 
@@ -1171,13 +1172,16 @@
 
     filter: {
 
+      // tag元匹配器
       "TAG": function (nodeNameSelector) {
         var nodeName = nodeNameSelector.replace(runescape, funescape).toLowerCase();
+        //返回一个检测是否匹配的函数
         return nodeNameSelector === "*" ?
           function () {
             return true;
           } :
           function (elem) {
+            //这里不区分大小写，并且会处理转义符 nodeNameSelector.replace(runescape, funescape)
             return elem.nodeName && elem.nodeName.toLowerCase() === nodeName;
           };
       },
@@ -1192,25 +1196,42 @@
           });
       },
 
+      /**
+       * 属性元匹配器
+       * 例如选择器 [type="checkbox"]中，name="type" operator="=" check="checkbox"
+       * @param name 属性名
+       * @param operator 操作符
+       * @param check 要检查的值
+       * @returns {Function}
+       */
       "ATTR": function (name, operator, check) {
+        //返回一个元匹配器函数
         return function (elem) {
-          var result = Sizzle.attr(elem, name);
+          var result = Sizzle.attr(elem, name);//先取出节点属性对应的属性值
 
+          //如果没有属性值，判断操作符是否等于 !=
           if (result == null) {
             return operator === "!=";
           }
-          if (!operator) {
+          if (!operator) {//如果没有操作符，那直接返回true
             return true;
           }
 
           result += "";
 
+          //匹配属性值等于 check 的所有元素
           return operator === "=" ? result === check :
+            //匹配属性值不等于 check 的所有元素
             operator === "!=" ? result !== check :
+              //匹配属性值以 check 开头的所有元素
               operator === "^=" ? check && result.indexOf(check) === 0 :
+                //匹配属性值包含 check 开头的所有元素
                 operator === "*=" ? check && result.indexOf(check) > -1 :
+                  //匹配属性值以 check 结尾的所有元素
                   operator === "$=" ? check && result.slice(-check.length) === check :
+                    //匹配属性值包含 "val" 的所有元素，val 指的是一单词，即val值前后都得有空格，或位于开头和结尾
                     operator === "~=" ? ( " " + result.replace(rwhitespace, " ") + " " ).indexOf(check) > -1 :
+                      //匹配属性值等于 check 或以 check- 开头的所有元素。
                       operator === "|=" ? result === check || result.slice(0, check.length + 1) === check + "-" :
                         false;
         };
@@ -1734,12 +1755,27 @@
     return selector;
   }
 
+  /**
+   * 调用 matcher 函数来处理 combinator（关系符）
+   * @param matcher
+   * @param combinator
+   * @param base
+   * @returns {Function}
+   */
   function addCombinator(matcher, combinator, base) {
-    var dir = combinator.dir,
+    var dir = combinator.dir,//这里dir指位置关系，比如parentNode
       checkNonElements = base && dir === "parentNode",
       doneName = done++;
 
-    return combinator.first ?
+    /**
+     relative: {
+      ">": {dir: "parentNode", first: true},
+      " ": {dir: "parentNode"},
+      "+": {dir: "previousSibling", first: true},
+      "~": {dir: "previousSibling"}
+     },
+     */
+    return combinator.first ?//如果first为true，表示处理的是父子关系或兄弟关系
       // Check against closest ancestor/preceding element
       function (elem, context, xml) {
         while ((elem = elem[dir])) {
@@ -1788,16 +1824,19 @@
   }
 
   function elementMatcher(matchers) {
+    //生成一个终极匹配器
     return matchers.length > 1 ?
+      //如果是多个匹配器的情况，那么就需要elem符合全部匹配器规则
       function (elem, context, xml) {
         var i = matchers.length;
-        while (i--) {
+        while (i--) {//从右到左开始匹配
           if (!matchers[i](elem, context, xml)) {
-            return false;
+            return false;//如果有一个没匹配中，那就说明该节点elem不符合规则
           }
         }
         return true;
       } :
+      //单个匹配器的话就返回自己即可
       matchers[0];
   }
 
@@ -1927,17 +1966,22 @@
   function matcherFromTokens(tokens) {
     var checkContext, matcher, j,
       len = tokens.length,
-      leadingRelative = Expr.relative[tokens[0].type],
-      implicitRelative = leadingRelative || Expr.relative[" "],
+      leadingRelative = Expr.relative[tokens[0].type],//元素位置关系，初始化取选择器生成的token第一个
+      implicitRelative = leadingRelative || Expr.relative[" "],//默认取祖先后代关系
       i = leadingRelative ? 1 : 0,
 
     // The foundational matcher ensures that elements are reachable from top-level context(s)
+      // 确保这些元素可以在context中找到
+      // 预处理函数，用到了闭包，判断elem是否是checkContext，即上下文元素
+      // 分为两种情况，1.检测父元素或相邻元素，2. 检测祖先元素或所有兄弟元素
       matchContext = addCombinator(function (elem) {
         return elem === checkContext;
       }, implicitRelative, true),
+      //检测 checkContext 是否包含 elem
       matchAnyContext = addCombinator(function (elem) {
         return indexOf(checkContext, elem) > -1;
       }, implicitRelative, true),
+    //初始化matchers这里用来确定元素在哪个context，即父亲，祖先还是兄弟
       matchers = [function (elem, context, xml) {
         var ret = ( !leadingRelative && ( xml || context !== outermostContext ) ) || (
             (checkContext = context).nodeType ?
@@ -1950,16 +1994,20 @@
 
     for (; i < len; i++) {
       if ((matcher = Expr.relative[tokens[i].type])) {
+        //当遇到关系选择器时elementMatcher函数将matchers数组中的函数生成一个函数
         matchers = [addCombinator(elementMatcher(matchers), matcher)];
       } else {
+        //说明该token是过滤器中的规则  ATTR CHILD CLASS ID PSEUDO TAG
         matcher = Expr.filter[tokens[i].type].apply(null, tokens[i].matches);
 
         // Return special upon seeing a positional matcher
+        //返回一个特殊的位置匹配函数，伪类会把selector分两部分
         if (matcher[expando]) {
           // Find the next relative operator (if any) for proper handling
+          // 发现下一个关系操作符（如果有话）并做适当处理
           j = ++i;
           for (; j < len; j++) {
-            if (Expr.relative[tokens[j].type]) {
+            if (Expr.relative[tokens[j].type]) { //如果位置伪类后面还有关系选择器还需要筛选
               break;
             }
           }
@@ -1970,8 +2018,8 @@
               tokens.slice(0, i - 1).concat({value: tokens[i - 2].type === " " ? "*" : ""})
             ).replace(rtrim, "$1"),
             matcher,
-            i < j && matcherFromTokens(tokens.slice(i, j)),
-            j < len && matcherFromTokens((tokens = tokens.slice(j))),
+            i < j && matcherFromTokens(tokens.slice(i, j)), //如果位置伪类后面还有选择器需要筛选
+            j < len && matcherFromTokens((tokens = tokens.slice(j))),//如果位置伪类后面还有关系选择器还需要筛选
             j < len && toSelector(tokens)
           );
         }
@@ -2083,22 +2131,23 @@
 
   /**
    * 编译函数
+   * 通过传递进来的selector和match生成匹配器来处理
    * @type {Function}
    */
   compile = Sizzle.compile = function (selector, match /* Internal Use Only */) {
     var i,
       setMatchers = [],
       elementMatchers = [],
-      cached = compilerCache[selector + " "];
+      cached = compilerCache[selector + " "];//如果缓存中有预编译函数，则直接拿来使用
 
     if (!cached) {
       // Generate a function of recursive functions that can be used to check each element
       if (!match) {
-        match = tokenize(selector);
+        match = tokenize(selector);//如果没有词法解析，需要重新解析
       }
       i = match.length;
       while (i--) {
-        cached = matcherFromTokens(match[i]);
+        cached = matcherFromTokens(match[i]);//这里用matcherFromTokens来生成对应Token的匹配器
         if (cached[expando]) {
           setMatchers.push(cached);
         } else {
@@ -2116,7 +2165,6 @@
   };
 
   /**
-   *  http://blog.csdn.net/songzheng_741/article/details/25704159
    * 用来处理浏览器不支持 querySelectorAll 的情况或者处理低级别的选择器，也就是浏览器不支持的选择符，比如 :button 等
    * 该方法处理效率比浏览器支持的选择器低，因此在考虑性能的时候，尽量使用CSS3选择器，即浏览器原生的选择器
    * A low-level selection function that works with Sizzle's compiled
@@ -2130,7 +2178,7 @@
   select = Sizzle.select = function (selector, context, results, seed) {
     var i, tokens, token, type, find,
       compiled = typeof selector === "function" && selector,
-      match = !seed && tokenize((selector = compiled.selector || selector));
+      match = !seed && tokenize((selector = compiled.selector || selector));//调用tokenize(selector)分割selector
 
     results = results || [];
 
@@ -2161,13 +2209,14 @@
 
       // Fetch a seed set for right-to-left matching
       //"needsContext": new RegExp("^" + whitespace + "*[>+~]|:(even|odd|eq|gt|lt|nth|first|last)(?:\\(" + whitespace + "*((?:-\\d)?\\d*)" + whitespace + "*\\)|)(?=[^-]|$)", "i")
-      //如果存在needsContext中的表达式，则不需要处理，否则需要处理
+      //如果存在needsContext中的表达式，则不需要处理，否则需要处理（说明有Sizzle伪类的情况）
       i = matchExpr["needsContext"].test(selector) ? 0 : tokens.length;
       //从右向左处理
       while (i--) {
         token = tokens[i];
 
         // Abort if we hit a combinator
+        // 如果遇到了关系选择器则中止
         if (Expr.relative[(type = token.type)]) {
           break;
         }
