@@ -1823,6 +1823,7 @@
       };
   }
 
+  //匹配器，如果matchers length大于1，如果运行预编译的函数mather时，有一个没有命中，则返回false
   function elementMatcher(matchers) {
     //生成一个终极匹配器
     return matchers.length > 1 ?
@@ -1963,6 +1964,13 @@
     });
   }
 
+  /**
+   *
+   * 生成用于匹配token的预编译函数
+   * 按照tokens先后顺序处理每个token，并生成递归嵌套编译函数，最后把最外层的函数返回
+   * @param tokens
+   * @returns {*}
+   */
   function matcherFromTokens(tokens) {
     var checkContext, matcher, j,
       len = tokens.length,
@@ -1995,9 +2003,35 @@
     for (; i < len; i++) {
       if ((matcher = Expr.relative[tokens[i].type])) {
         //当遇到关系选择器时elementMatcher函数将matchers数组中的函数生成一个函数
+        //对于matchers的length大于1时，elementMatcher(matchers)返回
+        /**
+         * function ( elem, context, xml ) {
+            var i = matchers.length;
+            while ( i-- ) {
+              if ( !matchers[i]( elem, context, xml ) ) {
+                return false;
+              }
+            }
+            return true;
+          }
+         * @type {*[]}
+         */
+        //重新把前面生成的matchers合并为一个预处理函数，对于是父子关系或邻居兄弟关系
+        /**
+         * function (elem, context, xml) {
+            while ((elem = elem[dir])) {
+              if (elem.nodeType === 1 || checkNonElements) {
+                return matcher(elem, context, xml);
+              }
+            }
+          }
+         */
         matchers = [addCombinator(elementMatcher(matchers), matcher)];
       } else {
         //说明该token是过滤器中的规则  ATTR CHILD CLASS ID PSEUDO TAG
+        //调用过滤器filter返回是否命中预处理函数
+        //比如 tokens[i].type 是 TAG，返回的预处理函数为
+        //function ( elem ) {return elem.nodeName && elem.nodeName.toLowerCase() === nodeName;}
         matcher = Expr.filter[tokens[i].type].apply(null, tokens[i].matches);
 
         // Return special upon seeing a positional matcher
@@ -2027,12 +2061,14 @@
       }
     }
 
+    //再次调用生成最终的预处理函数
     return elementMatcher(matchers);
   }
 
   function matcherFromGroupMatchers(elementMatchers, setMatchers) {
     var bySet = setMatchers.length > 0,
       byElement = elementMatchers.length > 0,
+      //最终执行预编译函数查询节点，将会在这里
       superMatcher = function (seed, context, xml, results, outermost) {
         var elem, j, matcher,
           matchedCount = 0,
@@ -2041,6 +2077,7 @@
           setMatched = [],
           contextBackup = outermostContext,
         // We must always have either seed elements or outermost context
+          //确保有种子元素，即待命中的可选种子元素，并且有最外层上下文
           elems = seed || byElement && Expr.find["TAG"]("*", outermost),
         // Use integer dirruns iff this is the outermost matcher
           dirrunsUnique = (dirruns += contextBackup == null ? 1 : Math.random() || 0.1),
@@ -2058,6 +2095,23 @@
           if (byElement && elem) {
             j = 0;
             while ((matcher = elementMatchers[j++])) {
+              //调用之前生成的预编译函数，见 elementMatcher
+              /**
+               * function elementMatcher( matchers ) {
+                  return matchers.length > 1 ?
+                    function( elem, context, xml ) {
+                      var i = matchers.length;
+                      while ( i-- ) {
+                        if ( !matchers[i]( elem, context, xml ) ) {
+                          return false;
+                        }
+                      }
+                      return true;
+                    } :
+                    matchers[0];
+                }
+               */
+              //递归调用之前预编译函数，如命中则放到results中
               if (matcher(elem, context, xml)) {
                 results.push(elem);
                 break;
@@ -2137,7 +2191,7 @@
   compile = Sizzle.compile = function (selector, match /* Internal Use Only */) {
     var i,
       setMatchers = [],
-      elementMatchers = [],
+      elementMatchers = [],//元素匹配预编译函数
       cached = compilerCache[selector + " "];//如果缓存中有预编译函数，则直接拿来使用
 
     if (!cached) {
@@ -2147,7 +2201,21 @@
       }
       i = match.length;
       while (i--) {
-        cached = matcherFromTokens(match[i]);//这里用matcherFromTokens来生成对应Token的匹配器
+        //这里用matcherFromTokens来生成对应Token的匹配器预编译函数，返回的是一个闭包函数
+        //matchers会包含从右向左各个token的预编译函数，是递归闭包的，即会递归执行里面的闭包函数
+        //最终是执行 Expr.filter 来判断是否匹配，即命中，当然对于没有命中的情况，直接返回，不会遍历到所有的tokens
+        /**
+         * function ( elem, context, xml ) {
+            var i = matchers.length;
+            while ( i-- ) {
+              if ( !matchers[i]( elem, context, xml ) ) {
+                return false;
+              }
+            }
+            return true;
+          }
+         */
+        cached = matcherFromTokens(match[i]);
         if (cached[expando]) {
           setMatchers.push(cached);
         } else {
@@ -2156,9 +2224,12 @@
       }
 
       // Cache the compiled function
+      //matcherFromGroupMatchers(elementMatchers, setMatchers)会返回 超级匹配函数 superMatcher
+      //而compilerCache是设置缓存预编译函数
       cached = compilerCache(selector, matcherFromGroupMatchers(elementMatchers, setMatchers));
 
       // Save selector and tokenization
+      // 设置预编译函数 selector值
       cached.selector = selector;
     }
     return cached;
