@@ -59,7 +59,7 @@
     slice = arr.slice,
   // Use a stripped-down indexOf as it's faster than native
   // http://jsperf.com/thor-indexof-vs-for/5
-    //判断elem是否属于list，即list中是否包含elem
+  //判断elem是否属于list，即list中是否包含elem
     indexOf = function (list, elem) {
       var i = 0,
         len = list.length;
@@ -141,7 +141,7 @@
       "*(\\d+)|))" + whitespace + "*\\)|)", "i"),
       "bool": new RegExp("^(?:" + booleans + ")$", "i"),
       // For use in libraries implementing .is()
-      // We use this for POS matching in `select`
+      // We use this for  matching in `select`
       "needsContext": new RegExp("^" + whitespace + "*[>+~]|:(even|odd|eq|gt|lt|nth|first|last)(?:\\(" +
       whitespace + "*((?:-\\d)?\\d*)" + whitespace + "*\\)|)(?=[^-]|$)", "i")
     },
@@ -195,7 +195,7 @@
     push = {
       apply: arr.length ?
 
-        // Leverage slice if possible
+        // Leverage slice if sible
         function (target, els) {
           push_native.apply(target, slice.call(els));
         } :
@@ -267,7 +267,7 @@
     //文档是HTML并且没有传入候选集seed
     if (!seed && documentIsHTML) {
 
-      // Try to shortcut find operations when possible (e.g., not under DocumentFragment)
+      // Try to shortcut find operations when sible (e.g., not under DocumentFragment)
       // rquickExpr = /^(?:#([\w-]+)|(\w+)|\.([\w-]+))$/,
       // 快速匹配最常用的单一 id tag class
       // rquickExpr 捕获组1:id 捕获组2:tag 捕获组3:class
@@ -1756,16 +1756,16 @@
   }
 
   /**
-   * 调用 matcher 函数来处理 combinator（关系符）
-   * @param matcher
-   * @param combinator
+   * 调用 matcher 函数来处理位置匹配器
+   * @param matcher 当前已分析的选择表达式片段“终极匹配器”
+   * @param combinator 元素位置标识
    * @param base
    * @returns {Function}
    */
   function addCombinator(matcher, combinator, base) {
     var dir = combinator.dir,//这里dir指位置关系，比如parentNode
       checkNonElements = base && dir === "parentNode",
-      doneName = done++;
+      doneName = done++;//第几个关系选择器
 
     /**
      relative: {
@@ -1775,22 +1775,25 @@
       "~": {dir: "previousSibling"}
      },
      */
-    return combinator.first ?//如果first为true，表示处理的是父子关系或兄弟关系
+    return combinator.first ?//如果first为true，表示处理的是父子关系或相邻兄弟关系
       // Check against closest ancestor/preceding element
       function (elem, context, xml) {
         while ((elem = elem[dir])) {
           if (elem.nodeType === 1 || checkNonElements) {
+            // 找到第一个父子节点或相邻兄弟关系，用匹配器判断这个节点是否符合前面的规则
             return matcher(elem, context, xml);
           }
         }
       } :
 
       // Check against all ancestor/preceding elements
+      // 处理祖先节点或兄弟关系
       function (elem, context, xml) {
         var oldCache, outerCache,
           newCache = [dirruns, doneName];
 
         // We can't set arbitrary data on XML nodes, so they don't benefit from dir caching
+        // 我们不可以在xml节点上设置任意数据，所以它们不会从dir缓存中受益
         if (xml) {
           while ((elem = elem[dir])) {
             if (elem.nodeType === 1 || checkNonElements) {
@@ -1800,9 +1803,11 @@
             }
           }
         } else {
+          //会一直匹配到true为止，例如祖宗关系的话，就一直找父亲节点直到有一个祖先节点符合规则为止
           while ((elem = elem[dir])) {
             if (elem.nodeType === 1 || checkNonElements) {
               outerCache = elem[expando] || (elem[expando] = {});
+              //如果有缓存且符合下列条件则不用再次调用matcher函数
               if ((oldCache = outerCache[dir]) &&
                 oldCache[0] === dirruns && oldCache[1] === doneName) {
 
@@ -1810,6 +1815,7 @@
                 return (newCache[2] = oldCache[2]);
               } else {
                 // Reuse newcache so results back-propagate to previous elements
+                // 重置新的缓存
                 outerCache[dir] = newCache;
 
                 // A match means we're done; a fail means we have to keep checking
@@ -1871,6 +1877,16 @@
     return newUnmatched;
   }
 
+  /**
+   * 对于伪类位置选择器，需要调用该函数来处理
+   * @param preFilter 前置过滤器预编译函数
+   * @param selector 前置过滤器的字符串格式
+   * @param matcher 当前位置伪类（比如：:first :eq(0) 等）匹配器预处理函数
+   * @param postFilter 后置过滤器，如果位置伪类后面还有选择器需要筛选
+   * @param postFinder 后置搜索器，如果位置伪类后面还有关系选择器还需要筛选
+   * @param postSelector 对应的选择符
+   * @returns {*}
+   */
   function setMatcher(preFilter, selector, matcher, postFilter, postFinder, postSelector) {
     if (postFilter && !postFilter[expando]) {
       postFilter = setMatcher(postFilter);
@@ -1905,10 +1921,12 @@
 
       // Find primary matches
       if (matcher) {
+        //调用 createPositionalPseudo 创建的函数过滤位置伪类，把不符合的设为false
         matcher(matcherIn, matcherOut, context, xml);
       }
 
       // Apply postFilter
+      // 处理后置的过滤器
       if (postFilter) {
         temp = condense(matcherOut, postMap);
         postFilter(temp, [], context, xml);
@@ -1965,9 +1983,8 @@
   }
 
   /**
-   *
    * 生成用于匹配token的预编译函数
-   * 按照tokens先后顺序处理每个token，并生成递归嵌套编译函数，最后把最外层的函数返回
+   * 按照tokens先后顺序处理每个token，并生成多层嵌套编译闭包函数，最后把最外层的函数返回
    * @param tokens
    * @returns {*}
    */
@@ -1979,13 +1996,13 @@
       i = leadingRelative ? 1 : 0,
 
     // The foundational matcher ensures that elements are reachable from top-level context(s)
-      // 确保这些元素可以在context中找到
-      // 预处理函数，用到了闭包，判断elem是否是checkContext，即上下文元素
-      // 分为两种情况，1.检测父元素或相邻元素，2. 检测祖先元素或所有兄弟元素
+    // 确保这些元素可以在context中找到
+    // 预处理函数，用到了闭包，判断elem是否是checkContext，即上下文元素
+    // 分为两种情况，1.检测父元素或相邻元素，2. 检测祖先元素或所有兄弟元素
       matchContext = addCombinator(function (elem) {
         return elem === checkContext;
       }, implicitRelative, true),
-      //检测 checkContext 是否包含 elem
+    //检测 checkContext 是否包含 elem
       matchAnyContext = addCombinator(function (elem) {
         return indexOf(checkContext, elem) > -1;
       }, implicitRelative, true),
@@ -2002,7 +2019,8 @@
 
     for (; i < len; i++) {
       if ((matcher = Expr.relative[tokens[i].type])) {
-        //当遇到关系选择器时elementMatcher函数将matchers数组中的函数生成一个函数
+        //当遇到关系选择器时，调用elementMatcher函数将matchers数组中的函数生成一个函数，
+        // 然后再调用 addCombinator 组合处理关系选择符与 matchers
         //对于matchers的length大于1时，elementMatcher(matchers)返回
         /**
          * function ( elem, context, xml ) {
@@ -2028,14 +2046,39 @@
          */
         matchers = [addCombinator(elementMatcher(matchers), matcher)];
       } else {
-        //说明该token是过滤器中的规则  ATTR CHILD CLASS ID PSEUDO TAG
+        //处理token属性type是  ATTR CHILD CLASS ID PSEUDO TAG 的情况
         //调用过滤器filter返回是否命中预处理函数
         //比如 tokens[i].type 是 TAG，返回的预处理函数为
         //function ( elem ) {return elem.nodeName && elem.nodeName.toLowerCase() === nodeName;}
         matcher = Expr.filter[tokens[i].type].apply(null, tokens[i].matches);
 
         // Return special upon seeing a positional matcher
-        //返回一个特殊的位置匹配函数，伪类会把selector分两部分
+        /**
+         * 如果matcher[expando]，表明生成的matcher是涉及位置预处理函数，比如伪类 :eq(0)
+         * 关于matcher[expando]，是在伪类 Expr.pseudos 对应的伪类符中定义的，详见createPositionalPseudo函数和markFunction函数
+         * 这种情况下，选择器表达式会分成两部分（以伪类为分界）。
+         * 首先调用setMatcher设置伪类选择器，并直接返回（不再往下处理tokens）
+         * 当前执行转到这里 cached = matcherFromTokens(match[i]); ，
+         * 然后循环处理tokens group（token分组，选择器中有 , 的情况会生成多个token分组的），
+         * 循环处理完后转到 cached = compilerCache(selector, matcherFromGroupMatchers(elementMatchers, setMatchers)); 生成超级函数并缓存该函数。
+         * 在执行超级函数时，如果是伪类生成的预编译函数，会执行以下代码
+         if (bySet && i !== matchedCount) {
+            j = 0;
+            while ((matcher = setMatchers[j++])) {
+              matcher(unmatched, setMatched, context, xml);
+            }
+          * 代码执行中会转到之前生成的matcher预编译函数，在该函数中会调用 multipleContexts 重新处理去掉伪类的前面选择器表达式，
+          * 如果前面的选择器表达式还存在伪类时，会重复迭代处理的。multipleContexts返回的结果作为伪类的上下文（查询到的结果是不包括伪类选择符条件的），
+          * 然后再处理伪类，最终返回符合选择器的元素
+              function multipleContexts( selector, contexts, results ) {
+                var i = 0,
+                  len = contexts.length;
+                for ( ; i < len; i++ ) {
+                  Sizzle( selector, contexts[i], results );
+                }
+                return results;
+              }
+         */
         if (matcher[expando]) {
           // Find the next relative operator (if any) for proper handling
           // 发现下一个关系操作符（如果有话）并做适当处理
@@ -2045,16 +2088,17 @@
               break;
             }
           }
+          // 调用setMatcher设置matcher
           return setMatcher(
-            i > 1 && elementMatcher(matchers),
+            i > 1 && elementMatcher(matchers),//前面生成的过滤器预编译函数
             i > 1 && toSelector(
               // If the preceding token was a descendant combinator, insert an implicit any-element `*`
               tokens.slice(0, i - 1).concat({value: tokens[i - 2].type === " " ? "*" : ""})
-            ).replace(rtrim, "$1"),
-            matcher,
+            ).replace(rtrim, "$1"),//选择器
+            matcher,//当前过滤器预编译函数
             i < j && matcherFromTokens(tokens.slice(i, j)), //如果位置伪类后面还有选择器需要筛选
             j < len && matcherFromTokens((tokens = tokens.slice(j))),//如果位置伪类后面还有关系选择器还需要筛选
-            j < len && toSelector(tokens)
+            j < len && toSelector(tokens)//对应的选择符
           );
         }
         matchers.push(matcher);
@@ -2066,9 +2110,9 @@
   }
 
   function matcherFromGroupMatchers(elementMatchers, setMatchers) {
-    var bySet = setMatchers.length > 0,
-      byElement = elementMatchers.length > 0,
-      //最终执行预编译函数查询节点，将会在这里
+    var bySet = setMatchers.length > 0,//通过伪类生成的预编译函数
+      byElement = elementMatchers.length > 0,//通过不是伪类生成的预编译函数
+    //最终执行预编译函数查询节点，将会在这里
       superMatcher = function (seed, context, xml, results, outermost) {
         var elem, j, matcher,
           matchedCount = 0,
@@ -2077,7 +2121,7 @@
           setMatched = [],
           contextBackup = outermostContext,
         // We must always have either seed elements or outermost context
-          //确保有种子元素，即待命中的可选种子元素，并且有最外层上下文
+          //初始种子元素，即待命中的可选种子元素，是根据参数seed 或 byElement和外层上下文确定的
           elems = seed || byElement && Expr.find["TAG"]("*", outermost),
         // Use integer dirruns iff this is the outermost matcher
           dirrunsUnique = (dirruns += contextBackup == null ? 1 : Math.random() || 0.1),
@@ -2137,6 +2181,7 @@
         }
 
         // Apply set filters to unmatched elements
+        // 处理位置伪类预编译函数
         matchedCount += i;
         if (bySet && i !== matchedCount) {
           j = 0;
@@ -2190,7 +2235,7 @@
    */
   compile = Sizzle.compile = function (selector, match /* Internal Use Only */) {
     var i,
-      setMatchers = [],
+      setMatchers = [],//选择器有位置伪类的预编译函数
       elementMatchers = [],//元素匹配预编译函数
       cached = compilerCache[selector + " "];//如果缓存中有预编译函数，则直接拿来使用
 
