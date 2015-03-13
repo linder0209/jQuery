@@ -1073,8 +1073,7 @@
     return ret;
   };
 
-  //选择器实体，用来处理不同的选择器
-  //用来处理关系符、过滤器以及伪类
+  //选择器实体，用来处理不同的选择器，如关系符、过滤器、伪类等
   Expr = Sizzle.selectors = {
 
     // Can be adjusted by the user
@@ -1879,14 +1878,18 @@
 
   /**
    * 对于伪类位置选择器，需要调用该函数来处理
-   * @param preFilter 前置过滤器预编译函数
-   * @param selector 前置过滤器的字符串格式
+   * @param preFilter 前置过滤器预编译函数，即伪类之前已生成的预编译过滤函数
+   * @param selector 前置过滤器的字符串格式，比如例子 'div > :header:not("h2") + p ~ div.button-panel > button[name="btn1"]:eq(0) > span'，
+   *                  此时 selector值为 div > :header:not("h2") + p ~ div.button-panel > button[name="btn1"]
    * @param matcher 当前位置伪类（比如：:first :eq(0) 等）匹配器预处理函数
-   * @param postFilter 后置过滤器，如果位置伪类后面还有选择器需要筛选
-   * @param postFinder 后置搜索器，如果位置伪类后面还有关系选择器还需要筛选
-   * @param postSelector 对应的选择符
+   * @param postFilter 后置过滤器，位置伪类后面到下一个出现关系操作符之间的选择器预编译函数，
+   *                    比如： :eq(0)[name="name1"] > span  则 postFilter 表示 [name="name1"] 生成的预编译函数，会转到 matcherFromTokens 函数处理的
+   * @param postFinder 后置关系操作符预编译函数，如果位置伪类后面还有关系选择器时，会生成预编译函数，
+   *                    对于上面的例子，指的是  > span 生成的预编译函数，会转到 matcherFromTokens 函数处理的
+   * @param postSelector 位置伪类后边的选择器，上面的例子为  > span
    * @returns {*}
    */
+
   function setMatcher(preFilter, selector, matcher, postFilter, postFinder, postSelector) {
     if (postFilter && !postFilter[expando]) {
       postFilter = setMatcher(postFilter);
@@ -2081,7 +2084,7 @@
          */
         if (matcher[expando]) {
           // Find the next relative operator (if any) for proper handling
-          // 发现下一个关系操作符（如果有话）并做适当处理
+          // 发现下一个关系操作符（如果有的话），这里主要查找位置伪类后面第一个出现关系操作符（ > ~ + 空白），是通过 j 来记录的
           j = ++i;
           for (; j < len; j++) {
             if (Expr.relative[tokens[j].type]) { //如果位置伪类后面还有关系选择器还需要筛选
@@ -2090,7 +2093,7 @@
           }
           // 调用setMatcher设置matcher
           return setMatcher(
-            i > 1 && elementMatcher(matchers),//前面生成的过滤器预编译函数
+            i > 1 && elementMatcher(matchers),//处理合并前面生成的过滤器预编译函数
             i > 1 && toSelector(
               // If the preceding token was a descendant combinator, insert an implicit any-element `*`
               tokens.slice(0, i - 1).concat({value: tokens[i - 2].type === " " ? "*" : ""})
@@ -2112,13 +2115,21 @@
   function matcherFromGroupMatchers(elementMatchers, setMatchers) {
     var bySet = setMatchers.length > 0,//通过伪类生成的预编译函数
       byElement = elementMatchers.length > 0,//通过不是伪类生成的预编译函数
-    //最终执行预编译函数查询节点，将会在这里
+      /**
+       * 最终执行预编译函数查询节点，将会在这里
+       * @param seed 种子元素
+       * @param context 上下文
+       * @param xml 是否为 xml
+       * @param results 返回结果集
+       * @param outermost 最外层上下文
+       * @returns {*|Array}
+       */
       superMatcher = function (seed, context, xml, results, outermost) {
         var elem, j, matcher,
           matchedCount = 0,
           i = "0",
-          unmatched = seed && [],
-          setMatched = [],
+          unmatched = seed && [],//种子或待匹配的元素
+          setMatched = [],//新匹配的结果
           contextBackup = outermostContext,
         // We must always have either seed elements or outermost context
           //初始种子元素，即待命中的可选种子元素，是根据参数seed 或 byElement和外层上下文确定的
@@ -2127,6 +2138,7 @@
           dirrunsUnique = (dirruns += contextBackup == null ? 1 : Math.random() || 0.1),
           len = elems.length;
 
+        //outermostContext 用来判断 context 是否等于 document
         if (outermost) {
           outermostContext = context !== document && context;
         }
